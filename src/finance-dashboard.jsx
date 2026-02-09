@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend, AreaChart, Area } from "recharts";
+import { supabase } from "./supabase";
 
 // ─── CATEGORY MAPPING ENGINE ───
 const CATEGORY_RULES = [
@@ -418,10 +419,16 @@ export default function FinanceDashboard() {
             <div style={{ fontSize: 11, letterSpacing: 3, color: COLORS.accent, fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>Eclipse Operation Services</div>
             <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, background: "linear-gradient(135deg, #e2e8f0, #22d3ee)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Financial Command Centre</h1>
           </div>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", background: COLORS.accent + "18", border: `1px solid ${COLORS.accent}40`, borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 500, color: COLORS.accent, transition: "all 0.2s" }}>
-            <span>＋ Import CSV</span>
-            <input type="file" multiple accept=".csv" onChange={handleFileUpload} style={{ display: "none" }} />
-          </label>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", background: COLORS.accent + "18", border: `1px solid ${COLORS.accent}40`, borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 500, color: COLORS.accent, transition: "all 0.2s" }}>
+              <span>＋ Import CSV</span>
+              <input type="file" multiple accept=".csv" onChange={handleFileUpload} style={{ display: "none" }} />
+            </label>
+            <button onClick={() => supabase.auth.signOut()} style={{
+              padding: "8px 16px", background: "none", border: `1px solid ${COLORS.border}`, borderRadius: 8,
+              color: COLORS.textDim, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", transition: "all 0.2s",
+            }}>Sign Out</button>
+          </div>
         </div>
       </div>
 
