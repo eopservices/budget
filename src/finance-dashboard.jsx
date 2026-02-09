@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend, AreaChart, Area } from "recharts";
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend, AreaChart, Area, ComposedChart } from "recharts";
 import { supabase } from "./supabase";
 
 // ─── CATEGORY MAPPING ENGINE ───
@@ -161,6 +161,50 @@ const BUDGET = {
   }
 };
 
+// ─── CASH FLOW DATA (12-month FY2025-26) ───
+const CF_MONTHS = ["Jul 25","Aug 25","Sep 25","Oct 25","Nov 25","Dec 25","Jan 26","Feb 26","Mar 26","Apr 26","May 26","Jun 26"];
+const CF_ACTUAL_MONTHS = [0,1,2,3,4,5,6];
+const CF_CUR_MONTH = 6;
+
+const CF = {
+  income: {
+    "Wages":              [2680,2680,2675,2880,2680,1920,2100,2773.33,5773.33,5773.33,5773.33,5773.33],
+    "Eclipse Rent":       [2925,2925,2925,2925,2925,2925,2925,3033,3033,3033,3033,3033],
+    "Tax Return":         [0,0,0,0,0,0,0,0,0,0,0,0],
+    "Other (Non-Taxable)":[605,0,75,43000,0,0,960,960,0,0,0,0],
+  },
+  expenses: {
+    "Tax":                     [0,0,0,0,0,0,0,0,0,0,0,0],
+    "HECS Repayments":         [0,0,0,0,0,0,0,0,0,0,0,0],
+    "Rent":                    [0,0,0,0,0,0,0,0,0,1733,1733,1733],
+    "Private Health Insurance":[122,98.58,98.58,98.58,98.58,98.58,98.58,98.58,98.58,98.58,98.58,98.58],
+    "Car Insurance":           [213.93,245.66,213.93,71.68,71.68,71.68,71.68,71.68,71.68,71.68,71.68,71.68],
+    "Car Rego":                [0,0,400,0,0,1048.86,0,0,0,0,0,0],
+    "Car Service":             [0,0,0,0,0,350,0,0,0,0,0,0],
+    "Car Loan":                [413.26,289.26,289.26,289.26,289.26,289.26,289.26,289.26,289.26,289.26,289.26,289.26],
+    "Fuel":                    [137.43,132.20,264.50,465.61,236.38,153.08,260,260,260,260,260,260],
+    "Mobile":                  [150,150,211,211,131.08,131.08,131.08,131.08,131.08,131.08,131.08,131.08],
+    "Health":                  [0,0,0,0,80,80,80,80,80,80,80,80],
+    "Subscriptions":           [322.82,305.90,199.11,72.95,56.96,115.91,72.95,72.95,72.95,72.95,72.95,72.95],
+    "Groceries":               [281.42,347.05,366.40,246.16,474.25,341.82,350,350,350,350,350,350],
+    "General":                 [1459.02,687.81,1097.27,1648.61,1298.67,2176.44,1200,1200,1200,1200,1200,1200],
+    "EOP Software":            [0,421.54,465.33,395.07,430.86,430.86,450,450,450,450,450,450],
+    "House Insurance":         [122.83,122.83,122.83,122.83,122.83,122.83,122.83,122.83,122.83,122.83,122.83,122.83],
+    "Eclipse Utilities":       [418.77,523.15,409.33,0,523.15,418.77,0,523.15,418.77,0,523.15,418.77],
+    "Other":                   [0,0,0,39289,0,0,0,0,0,0,0,0],
+    "Mortgage (Consolidated)": [1925.23,1950.59,1950.59,1950.59,1950.59,1950.59,1950.59,1950.59,1950.59,1950.59,1950.59,1950.59],
+  },
+  totals: {
+    income:   [6210,5605,5675,48805,5605,4845,5985,6766.33,8806.33,8806.33,8806.33,8806.33],
+    expenses: [5566.71,5274.57,6088.13,44861.34,5764.29,7779.76,5076.97,5600.12,5495.74,6809.97,7333.12,7228.74],
+    net:      [643.29,330.43,-413.13,3943.66,-159.29,-2934.76,908.03,1166.21,3310.59,1996.36,1473.21,1577.59],
+    savings:  [3493.24,3823.67,3410.54,7354.20,7194.91,4260.15,5168.18,6334.39,9644.98,11641.34,13114.55,14692.14],
+  },
+  openingSavings: 2849.95,
+};
+
+const formatCF = v => v < 0 ? `-$${Math.abs(Math.round(v)).toLocaleString()}` : `$${Math.round(v).toLocaleString()}`;
+
 // ─── PRESET JANUARY DATA ───
 const PRESET_DATA = `Date,Amount,Account Number,,Transaction Type,Transaction Details,Category,Merchant Name,Processed On
 30 Jan 26,-45.75,Card ending 7386,,CREDIT CARD PURCHASE,COLES 4545 NORTH LAKE,Groceries,Coles (Westfield North Lakes),30 Jan 26
@@ -270,6 +314,7 @@ const PRESET_EOS = `Transaction Date,Details,Account,Category,Subcategory,Tags,N
 const COLORS = {
   bg: "#0a0f1a",
   card: "#111827",
+  cardAlt: "#0d1321",
   cardHover: "#1a2234",
   border: "#1e293b",
   text: "#e2e8f0",
@@ -400,6 +445,7 @@ export default function FinanceDashboard() {
   }, [expenses]);
 
   const tabs = [
+    { id: "cashflow", label: "Cash Flow", icon: "⟳" },
     { id: "dashboard", label: "Dashboard", icon: "◉" },
     { id: "transactions", label: "Transactions", icon: "≡" },
     { id: "budget", label: "Budget", icon: "▤" },
@@ -448,7 +494,8 @@ export default function FinanceDashboard() {
       </div>
 
       {/* Content */}
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px" }}>
+      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "24px" }}>
+        {activeTab === "cashflow" && <CashFlowTab />}
         {activeTab === "dashboard" && <DashboardTab
           totalIncome={totalIncome} totalExpenses={totalExpenses} netIncome={netIncome}
           categoryTotals={categoryTotals} dailySpending={dailySpending} budgetComparison={budgetComparison}
@@ -989,6 +1036,161 @@ function ReconcileTab({ balances, setBalances }) {
           • Internal transfers between accounts are excluded from expense totals<br />
           • Interest accruals may cause small discrepancies on savings accounts<br />
           • The "expected" balance comes from the most recent balance shown in your CSV export
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── CASH FLOW ───
+function CashFlowTab() {
+  const [expanded, setExpanded] = useState({ income: true, expenses: true });
+  const [hCol, setHCol] = useState(null);
+  const d = CF;
+  const annualIncome = d.totals.income.reduce((s, v) => s + v, 0);
+  const annualExpenses = d.totals.expenses.reduce((s, v) => s + v, 0);
+  const annualNet = annualIncome - annualExpenses;
+
+  const chartData = CF_MONTHS.map((m, i) => ({ month: m, income: Math.round(d.totals.income[i]), expenses: Math.round(d.totals.expenses[i]), net: Math.round(d.totals.net[i]), savings: Math.round(d.totals.savings[i]) }));
+
+  const cellStyle = (i) => ({ padding: "8px 12px", textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, fontWeight: 500, color: COLORS.text, background: i === CF_CUR_MONTH ? COLORS.accent + "08" : hCol === i ? "#ffffff06" : "transparent", borderRight: `1px solid ${COLORS.border}08`, opacity: CF_ACTUAL_MONTHS.includes(i) ? 1 : 0.55, whiteSpace: "nowrap" });
+  const totalStyle = (i, color) => ({ ...cellStyle(i), fontWeight: 700, color, fontSize: 13, opacity: 1 });
+  const headerCell = (i) => ({ padding: "10px 12px", textAlign: "right", fontSize: 11, fontWeight: 600, letterSpacing: 0.5, color: i === CF_CUR_MONTH ? COLORS.accent : COLORS.textDim, background: i === CF_CUR_MONTH ? COLORS.accent + "08" : "transparent", cursor: "pointer", textTransform: "uppercase", borderBottom: i === CF_CUR_MONTH ? `2px solid ${COLORS.accent}` : "2px solid transparent", whiteSpace: "nowrap" });
+  const labelCell = { padding: "8px 16px", fontSize: 13, color: COLORS.text, whiteSpace: "nowrap", position: "sticky", left: 0, background: COLORS.card, zIndex: 2, borderRight: `1px solid ${COLORS.border}` };
+  const sectionLabel = { ...labelCell, fontWeight: 700, fontSize: 13, cursor: "pointer", color: COLORS.accent };
+  const totalLabel = { ...labelCell, fontWeight: 700, fontSize: 14 };
+  const annualCell = (isAmt = true) => ({ padding: "8px 12px", textAlign: "right", fontFamily: isAmt ? "'JetBrains Mono', monospace" : "inherit", fontSize: 12, fontWeight: 600, color: COLORS.textDim, background: COLORS.cardAlt, whiteSpace: "nowrap" });
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+        <MetricCard label="FY Annual Income" value={formatCF(annualIncome)} subtitle="Jul 25 – Jun 26" color={COLORS.green} icon="↓" />
+        <MetricCard label="FY Annual Expenses" value={formatCF(annualExpenses)} subtitle="All categories" color={COLORS.red} icon="↑" />
+        <MetricCard label="FY Net Position" value={`${annualNet >= 0 ? "+" : ""}${formatCF(annualNet)}`} color={annualNet >= 0 ? COLORS.green : COLORS.red} icon="≈" />
+        <MetricCard label="Projected Savings" value={formatCF(d.totals.savings[11])} subtitle={`From $${d.openingSavings.toLocaleString()} opening`} color={COLORS.accent} icon="◎" />
+      </div>
+
+      <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 20 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>12-Month Cash Flow Overview</div>
+        <div style={{ fontSize: 12, color: COLORS.textDim, marginBottom: 16 }}>Bars = income & expenses • Line = net position</div>
+        <ResponsiveContainer width="100%" height={280}>
+          <ComposedChart data={chartData} margin={{ left: 10 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={COLORS.border} />
+            <XAxis dataKey="month" tick={{ fill: COLORS.textDim, fontSize: 11 }} />
+            <YAxis tick={{ fill: COLORS.textDim, fontSize: 10 }} tickFormatter={v => v > 999 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`} />
+            <Tooltip contentStyle={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 8, fontSize: 12 }} formatter={(v, n) => [formatCF(v), n]} />
+            <Bar dataKey="income" fill={COLORS.green} radius={[3, 3, 0, 0]} name="Income" opacity={0.8} />
+            <Bar dataKey="expenses" fill={COLORS.red} radius={[3, 3, 0, 0]} name="Expenses" opacity={0.6} />
+            <Line type="monotone" dataKey="net" stroke={COLORS.accent} strokeWidth={2} dot={{ fill: COLORS.accent, r: 3 }} name="Net" />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 20 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>Cumulative Savings Trajectory</div>
+        <ResponsiveContainer width="100%" height={200}>
+          <AreaChart data={[{ month: "Opening", savings: d.openingSavings }, ...chartData.map(c => ({ month: c.month, savings: c.savings }))]} margin={{ left: 10 }}>
+            <defs><linearGradient id="savingsGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={COLORS.accent} stopOpacity={0.3} /><stop offset="95%" stopColor={COLORS.accent} stopOpacity={0} /></linearGradient></defs>
+            <CartesianGrid strokeDasharray="3 3" stroke={COLORS.border} />
+            <XAxis dataKey="month" tick={{ fill: COLORS.textDim, fontSize: 10 }} />
+            <YAxis tick={{ fill: COLORS.textDim, fontSize: 10 }} tickFormatter={v => `$${(v / 1000).toFixed(1)}k`} />
+            <Tooltip contentStyle={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 8, fontSize: 12 }} formatter={v => [formatCF(v), "Savings"]} />
+            <Area type="monotone" dataKey="savings" stroke={COLORS.accent} fill="url(#savingsGrad)" strokeWidth={2} dot={{ fill: COLORS.accent, r: 3 }} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div style={{ display: "flex", gap: 16, fontSize: 12, color: COLORS.textDim, alignItems: "center" }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 2, background: COLORS.text, display: "inline-block" }} /> Actual</span>
+        <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 2, background: COLORS.text, opacity: 0.4, display: "inline-block" }} /> Projected</span>
+        <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 2, background: COLORS.accent + "30", display: "inline-block" }} /> Current Month</span>
+      </div>
+
+      {/* Cash Flow Table */}
+      <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, overflow: "hidden" }}>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1100 }}>
+            <thead><tr style={{ borderBottom: `2px solid ${COLORS.border}` }}>
+              <th style={{ ...labelCell, fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: 1.5, color: COLORS.textDim }}>FY2025-26</th>
+              {CF_MONTHS.map((m, i) => <th key={m} style={headerCell(i)} onMouseEnter={() => setHCol(i)} onMouseLeave={() => setHCol(null)}>{m}</th>)}
+              <th style={{ ...annualCell(false), fontWeight: 700, fontSize: 11, letterSpacing: 0.5, textTransform: "uppercase" }}>Annual</th>
+            </tr></thead>
+            <tbody>
+              {/* INCOME */}
+              <tr style={{ borderBottom: `1px solid ${COLORS.border}20` }} onClick={() => setExpanded(p => ({ ...p, income: !p.income }))}>
+                <td style={sectionLabel}>{expanded.income ? "▾" : "▸"} Incomings (before tax)</td>
+                {CF_MONTHS.map((_, i) => <td key={i} style={cellStyle(i)} />)}
+                <td style={annualCell()} />
+              </tr>
+              {expanded.income && Object.entries(d.income).map(([name, vals]) => {
+                const ann = vals.reduce((s, v) => s + v, 0);
+                if (ann === 0) return null;
+                return <tr key={name} style={{ borderBottom: `1px solid ${COLORS.border}08` }}>
+                  <td style={{ ...labelCell, paddingLeft: 32, fontSize: 12, color: COLORS.textDim }}>{name}</td>
+                  {vals.map((v, i) => <td key={i} style={cellStyle(i)} onMouseEnter={() => setHCol(i)} onMouseLeave={() => setHCol(null)}>{v > 0 ? formatCF(v) : "–"}</td>)}
+                  <td style={annualCell()}>{ann > 0 ? formatCF(ann) : "–"}</td>
+                </tr>;
+              })}
+              <tr style={{ borderBottom: `2px solid ${COLORS.border}30`, background: COLORS.greenDim + "15" }}>
+                <td style={{ ...totalLabel, background: COLORS.greenDim + "15" }}>Total Incomings</td>
+                {d.totals.income.map((v, i) => <td key={i} style={{ ...totalStyle(i, COLORS.green), background: i === CF_CUR_MONTH ? COLORS.accent + "10" : COLORS.greenDim + "15" }} onMouseEnter={() => setHCol(i)} onMouseLeave={() => setHCol(null)}>{formatCF(v)}</td>)}
+                <td style={{ ...annualCell(), color: COLORS.green, fontWeight: 700, fontSize: 13 }}>{formatCF(annualIncome)}</td>
+              </tr>
+
+              <tr><td colSpan={14} style={{ height: 8, background: COLORS.card }} /></tr>
+
+              {/* EXPENSES */}
+              <tr style={{ borderBottom: `1px solid ${COLORS.border}20` }} onClick={() => setExpanded(p => ({ ...p, expenses: !p.expenses }))}>
+                <td style={sectionLabel}>{expanded.expenses ? "▾" : "▸"} Outgoings</td>
+                {CF_MONTHS.map((_, i) => <td key={i} style={cellStyle(i)} />)}
+                <td style={annualCell()} />
+              </tr>
+              {expanded.expenses && Object.entries(d.expenses).map(([name, vals]) => {
+                const ann = vals.reduce((s, v) => s + v, 0);
+                if (ann === 0) return null;
+                return <tr key={name} style={{ borderBottom: `1px solid ${COLORS.border}08` }}>
+                  <td style={{ ...labelCell, paddingLeft: 32, fontSize: 12, color: COLORS.textDim }}>{name}</td>
+                  {vals.map((v, i) => <td key={i} style={cellStyle(i)} onMouseEnter={() => setHCol(i)} onMouseLeave={() => setHCol(null)}>{v > 0 ? formatCF(v) : "–"}</td>)}
+                  <td style={annualCell()}>{ann > 0 ? formatCF(ann) : "–"}</td>
+                </tr>;
+              })}
+              <tr style={{ borderBottom: `2px solid ${COLORS.border}30`, background: COLORS.redDim + "15" }}>
+                <td style={{ ...totalLabel, background: COLORS.redDim + "15" }}>Total Outgoings</td>
+                {d.totals.expenses.map((v, i) => <td key={i} style={{ ...totalStyle(i, COLORS.red), background: i === CF_CUR_MONTH ? COLORS.accent + "10" : COLORS.redDim + "15" }} onMouseEnter={() => setHCol(i)} onMouseLeave={() => setHCol(null)}>{formatCF(v)}</td>)}
+                <td style={{ ...annualCell(), color: COLORS.red, fontWeight: 700, fontSize: 13 }}>{formatCF(annualExpenses)}</td>
+              </tr>
+
+              <tr><td colSpan={14} style={{ height: 8, background: COLORS.card }} /></tr>
+
+              {/* NET */}
+              <tr style={{ background: "#ffffff06", borderBottom: `1px solid ${COLORS.border}30` }}>
+                <td style={{ ...totalLabel, background: "#ffffff06" }}>Net Income</td>
+                {d.totals.net.map((v, i) => <td key={i} style={{ ...totalStyle(i, v >= 0 ? COLORS.green : COLORS.red), background: i === CF_CUR_MONTH ? COLORS.accent + "10" : "#ffffff06", fontSize: 13 }} onMouseEnter={() => setHCol(i)} onMouseLeave={() => setHCol(null)}>{v >= 0 ? "+" : ""}{formatCF(v)}</td>)}
+                <td style={{ ...annualCell(), color: annualNet >= 0 ? COLORS.green : COLORS.red, fontWeight: 700, fontSize: 13 }}>{annualNet >= 0 ? "+" : ""}{formatCF(annualNet)}</td>
+              </tr>
+
+              {/* SAVINGS */}
+              <tr style={{ background: COLORS.accentDim + "15" }}>
+                <td style={{ ...totalLabel, background: COLORS.accentDim + "15", fontSize: 14 }}>Total Savings<div style={{ fontSize: 10, fontWeight: 400, color: COLORS.textDim, marginTop: 2 }}>Opening: ${d.openingSavings.toLocaleString()}</div></td>
+                {d.totals.savings.map((v, i) => <td key={i} style={{ ...totalStyle(i, COLORS.accent), background: i === CF_CUR_MONTH ? COLORS.accent + "15" : COLORS.accentDim + "15", fontSize: 14 }} onMouseEnter={() => setHCol(i)} onMouseLeave={() => setHCol(null)}>{formatCF(v)}</td>)}
+                <td style={{ ...annualCell(), color: COLORS.accent, fontWeight: 700, fontSize: 14 }}>{formatCF(d.totals.savings[11])}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 20 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Key Cash Flow Observations</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 13 }}>
+          {[
+            { icon: "📈", text: "Wages jump from $2,773 to $5,773 in March — income nearly doubles from that point forward.", color: COLORS.green },
+            { icon: "🏠", text: "Rent expense of $1,733/month begins in April — eating into the wage increase.", color: COLORS.amber },
+            { icon: "⚡", text: "October had $43,000 in 'Other' non-taxable income and $39,289 in 'Other' expenses — likely a property settlement.", color: COLORS.textDim },
+            { icon: "📉", text: "December was the worst month: -$2,935 net due to reduced wages ($1,920), car rego ($1,049), and high general spending ($2,176).", color: COLORS.red },
+            { icon: "💰", text: `Savings grow from $2,850 to a projected $14,692 by June — a ${Math.round(((14692 - 2850) / 2850) * 100)}% increase over the year.`, color: COLORS.accent },
+            { icon: "📊", text: "Eclipse Utilities alternate between $418-523 bi-monthly — budget shows gaps every other month.", color: COLORS.textDim },
+          ].map((o, i) => <div key={i} style={{ display: "flex", gap: 12, padding: "10px 14px", background: COLORS.bg, borderRadius: 8, borderLeft: `3px solid ${o.color}` }}><span style={{ fontSize: 16 }}>{o.icon}</span><span style={{ color: COLORS.text, lineHeight: 1.6 }}>{o.text}</span></div>)}
         </div>
       </div>
     </div>
